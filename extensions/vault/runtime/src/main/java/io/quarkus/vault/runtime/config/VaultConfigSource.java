@@ -2,7 +2,6 @@ package io.quarkus.vault.runtime.config;
 
 import static io.quarkus.vault.runtime.config.VaultCacheEntry.tryReturnLastKnownValue;
 import static java.util.Collections.emptyMap;
-import static java.util.Optional.empty;
 import static java.util.stream.Collectors.toMap;
 
 import java.util.HashMap;
@@ -13,7 +12,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.jboss.logging.Logger;
 
-import io.quarkus.vault.runtime.VaultManager;
+import io.quarkus.arc.Arc;
+import io.quarkus.vault.VaultKVSecretEngine;
 
 public class VaultConfigSource implements ConfigSource {
 
@@ -85,7 +85,11 @@ public class VaultConfigSource implements ConfigSource {
     }
 
     private Map<String, String> fetchSecrets(String path, String prefix) {
-        return prefixMap(VaultManager.getInstance().getVaultKvManager().readSecret(path), prefix);
+        return prefixMap(getVaultKVSecretEngine().readSecret(path), prefix);
+    }
+
+    private VaultKVSecretEngine getVaultKVSecretEngine() {
+        return Arc.container().instance(VaultKVSecretEngine.class).get();
     }
 
     private Map<String, String> prefixMap(Map<String, String> map, String prefix) {

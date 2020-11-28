@@ -15,6 +15,9 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
+import javax.enterprise.context.ApplicationScoped;
+import javax.inject.Inject;
+
 import io.quarkus.vault.VaultException;
 import io.quarkus.vault.VaultTransitExportKeyType;
 import io.quarkus.vault.VaultTransitKeyDetail;
@@ -44,7 +47,6 @@ import io.quarkus.vault.runtime.client.dto.transit.VaultTransitVerifyBatchInput;
 import io.quarkus.vault.runtime.client.dto.transit.VaultTransitVerifyBody;
 import io.quarkus.vault.runtime.client.dto.transit.VaultTransitVerifyDataBatchResult;
 import io.quarkus.vault.runtime.config.TransitKeyConfig;
-import io.quarkus.vault.runtime.config.VaultRuntimeConfig;
 import io.quarkus.vault.runtime.transit.DecryptionResult;
 import io.quarkus.vault.runtime.transit.EncryptionResult;
 import io.quarkus.vault.runtime.transit.SigningResult;
@@ -67,17 +69,13 @@ import io.quarkus.vault.transit.VaultTransitKeyExportDetail;
 import io.quarkus.vault.transit.VaultVerificationBatchException;
 import io.quarkus.vault.transit.VerificationRequest;
 
+@ApplicationScoped
 public class VaultTransitManager implements VaultTransitSecretEngine {
 
+    @Inject
     private VaultAuthManager vaultAuthManager;
+    @Inject
     private VaultClient vaultClient;
-    private VaultRuntimeConfig serverConfig;
-
-    public VaultTransitManager(VaultAuthManager vaultAuthManager, VaultClient vaultClient, VaultRuntimeConfig serverConfig) {
-        this.vaultAuthManager = vaultAuthManager;
-        this.vaultClient = vaultClient;
-        this.serverConfig = serverConfig;
-    }
 
     @Override
     public String encrypt(String keyName, String clearData) {
@@ -97,7 +95,7 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
         body.context = Base64String.from(request.getContext());
         body.keyVersion = request.getKeyVersion();
 
-        TransitKeyConfig config = serverConfig.transit.key.get(keyName);
+        TransitKeyConfig config = getTransitConfig(keyName);
         if (config != null) {
             keyName = config.name.orElse(keyName);
             body.type = config.type.orElse(null);
@@ -111,6 +109,10 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
             throw new VaultEncryptionBatchException("encryption error with key " + keyName, errorMap);
         }
         return result.getValue();
+    }
+
+    private TransitKeyConfig getTransitConfig(String keyName) {
+        return vaultAuthManager.getVaultRuntimeConfig().transit.key.get(keyName);
     }
 
     @Override
@@ -132,7 +134,7 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
         VaultTransitEncryptBody body = new VaultTransitEncryptBody();
         body.batchInput = requests.stream().map(this::getVaultTransitEncryptBatchInput).collect(toList());
 
-        TransitKeyConfig config = serverConfig.transit.key.get(keyName);
+        TransitKeyConfig config = getTransitConfig(keyName);
         if (config != null) {
             keyName = config.name.orElse(keyName);
             body.type = config.type.orElse(null);
@@ -166,7 +168,7 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
         VaultTransitDecryptBody body = new VaultTransitDecryptBody();
         body.batchInput = requests.stream().map(this::getVaultTransitDecryptBatchInput).collect(toList());
 
-        TransitKeyConfig config = serverConfig.transit.key.get(keyName);
+        TransitKeyConfig config = getTransitConfig(keyName);
         if (config != null) {
             keyName = config.name.orElse(keyName);
         }
@@ -201,7 +203,7 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
         VaultTransitRewrapBody body = new VaultTransitRewrapBody();
         body.batchInput = requests.stream().map(this::getVaultTransitRewrapBatchInput).collect(toList());
 
-        TransitKeyConfig config = serverConfig.transit.key.get(keyName);
+        TransitKeyConfig config = getTransitConfig(keyName);
         if (config != null) {
             keyName = config.name.orElse(keyName);
         }
@@ -250,7 +252,7 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
                 .map(this::getVaultTransitSignBatchInput)
                 .collect(toList());
 
-        TransitKeyConfig config = serverConfig.transit.key.get(keyName);
+        TransitKeyConfig config = getTransitConfig(keyName);
         if (config != null) {
             keyName = config.name.orElse(keyName);
             hashAlgorithm = config.hashAlgorithm.orElse(null);
@@ -296,7 +298,7 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
         VaultTransitVerifyBody body = new VaultTransitVerifyBody();
         body.batchInput = requests.stream().map(this::getVaultTransitVerifyBatchInput).collect(toList());
 
-        TransitKeyConfig config = serverConfig.transit.key.get(keyName);
+        TransitKeyConfig config = getTransitConfig(keyName);
         if (config != null) {
             keyName = config.name.orElse(keyName);
             hashAlgorithm = config.hashAlgorithm.orElse(null);

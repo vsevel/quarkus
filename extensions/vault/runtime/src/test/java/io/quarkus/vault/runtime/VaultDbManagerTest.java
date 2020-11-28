@@ -37,8 +37,8 @@ public class VaultDbManagerTest {
     AtomicBoolean lookupLeaseShouldReturn400 = new AtomicBoolean(false);
     VaultRenewLease vaultRenewLease = new VaultRenewLease();
     OkHttpVaultClient vaultClient = createVaultClient();
-    VaultAuthManager vaultAuthManager = new VaultAuthManager(vaultClient, config);
-    VaultDbManager vaultDbManager = new VaultDbManager(vaultAuthManager, vaultClient, config);
+    VaultAuthManager vaultAuthManager = new VaultAuthManager(vaultClient).setVaultRuntimeConfig(config);
+    VaultDbManager vaultDbManager = new VaultDbManager(vaultAuthManager, vaultClient);
     String mydbrole = "mydbrole";
     String mylease = "mylease";
 
@@ -125,7 +125,7 @@ public class VaultDbManagerTest {
     }
 
     private OkHttpVaultClient createVaultClient() {
-        return new OkHttpVaultClient(config, tlsConfig) {
+        OkHttpVaultClient okHttpVaultClient = new OkHttpVaultClient(tlsConfig) {
             @Override
             public VaultDatabaseCredentials generateDatabaseCredentials(String token, String databaseCredentialsRole) {
                 return credentials;
@@ -144,6 +144,8 @@ public class VaultDbManagerTest {
                 return vaultRenewLease;
             }
         };
+        okHttpVaultClient.initWith(config);
+        return okHttpVaultClient;
     }
 
 }

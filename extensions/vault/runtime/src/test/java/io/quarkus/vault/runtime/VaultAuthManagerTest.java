@@ -32,7 +32,7 @@ public class VaultAuthManagerTest {
     TlsConfig tlsConfig = new TlsConfig();
     AtomicBoolean lookupSelfShouldReturn403 = new AtomicBoolean(false);
     OkHttpVaultClient vaultClient = createVaultClient();
-    VaultAuthManager vaultAuthManager = new VaultAuthManager(vaultClient, config);
+    VaultAuthManager vaultAuthManager = new VaultAuthManager(vaultClient).setVaultRuntimeConfig(config);
     VaultUserPassAuth vaultUserPassAuth = new VaultUserPassAuth();
     VaultLookupSelf vaultLookupSelf = new VaultLookupSelf();
     VaultRenewSelf vaultRenewSelf = new VaultRenewSelf();
@@ -119,7 +119,7 @@ public class VaultAuthManagerTest {
     }
 
     private OkHttpVaultClient createVaultClient() {
-        return new OkHttpVaultClient(config, tlsConfig) {
+        OkHttpVaultClient okHttpVaultClient = new OkHttpVaultClient(tlsConfig) {
             @Override
             public VaultUserPassAuth loginUserPass(String user, String password) {
                 return vaultUserPassAuth;
@@ -138,6 +138,8 @@ public class VaultAuthManagerTest {
                 return vaultRenewSelf;
             }
         };
+        okHttpVaultClient.initWith(config);
+        return okHttpVaultClient;
     }
 
 }

@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import javax.inject.Singleton;
+
 import org.jboss.logging.Logger;
 
 import io.quarkus.vault.runtime.client.VaultClient;
@@ -15,6 +17,7 @@ import io.quarkus.vault.runtime.client.dto.database.VaultDatabaseCredentials;
 import io.quarkus.vault.runtime.client.dto.sys.VaultRenewLease;
 import io.quarkus.vault.runtime.config.VaultRuntimeConfig;
 
+@Singleton
 public class VaultDbManager {
 
     private static final Logger log = Logger.getLogger(VaultDbManager.class.getName());
@@ -22,12 +25,14 @@ public class VaultDbManager {
     ConcurrentHashMap<String, VaultDynamicDatabaseCredentials> credentialsCache = new ConcurrentHashMap<>();
     private VaultAuthManager vaultAuthManager;
     private VaultClient vaultClient;
-    private VaultRuntimeConfig serverConfig;
 
-    public VaultDbManager(VaultAuthManager vaultAuthManager, VaultClient vaultClient, VaultRuntimeConfig serverConfig) {
+    public VaultDbManager(VaultAuthManager vaultAuthManager, VaultClient vaultClient) {
         this.vaultAuthManager = vaultAuthManager;
         this.vaultClient = vaultClient;
-        this.serverConfig = serverConfig;
+    }
+
+    public VaultRuntimeConfig getVaultRuntimeConfig() {
+        return vaultAuthManager.getVaultRuntimeConfig();
     }
 
     public Map<String, String> getDynamicDbCredentials(String databaseCredentialsRole) {
@@ -53,12 +58,13 @@ public class VaultDbManager {
         }
 
         // extend lease if necessary
-        if (credentials != null && credentials.shouldExtend(serverConfig.renewGracePeriod)) {
+        if (credentials != null && credentials.shouldExtend(getVaultRuntimeConfig().renewGracePeriod)) {
             credentials = extend(credentials, clientToken, databaseCredentialsRole);
         }
 
         // create lease if necessary
-        if (credentials == null || credentials.isExpired() || credentials.expiresSoon(serverConfig.renewGracePeriod)) {
+        if (credentials == null || credentials.isExpired()
+                || credentials.expiresSoon(getVaultRuntimeConfig().renewGracePeriod)) {
             credentials = create(clientToken, databaseCredentialsRole);
         }
 
@@ -87,7 +93,7 @@ public class VaultDbManager {
                 currentCredentials.password);
         sanityCheck(credentials, databaseCredentialsRole);
         log.debug("extended " + databaseCredentialsRole + " credentials with: "
-                + credentials.getConfidentialInfo(serverConfig.logConfidentialityLevel));
+                + credentials.getConfidentialInfo(getVaultRuntimeConfig().logConfidentialityLevel));
         return credentials;
     }
 
@@ -100,13 +106,13 @@ public class VaultDbManager {
                 vaultDatabaseCredentials.data.username,
                 vaultDatabaseCredentials.data.password);
         log.debug("generated " + databaseCredentialsRole + " credentials: "
-                + credentials.getConfidentialInfo(serverConfig.logConfidentialityLevel));
+                + credentials.getConfidentialInfo(getVaultRuntimeConfig().logConfidentialityLevel));
         sanityCheck(credentials, databaseCredentialsRole);
         return credentials;
     }
 
     private void sanityCheck(VaultDynamicDatabaseCredentials credentials, String databaseCredentialsRole) {
-        credentials.leaseDurationSanityCheck(databaseCredentialsRole, serverConfig.renewGracePeriod);
+        credentials.leaseDurationSanityCheck(databaseCredentialsRole, getVaultRuntimeConfig().renewGracePeriod);
     }
 
 }

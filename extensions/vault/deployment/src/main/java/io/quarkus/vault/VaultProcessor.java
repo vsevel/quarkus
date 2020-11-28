@@ -15,12 +15,19 @@ import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationSourceValueBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.runtime.TlsConfig;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vault.runtime.Base64StringDeserializer;
 import io.quarkus.vault.runtime.Base64StringSerializer;
+import io.quarkus.vault.runtime.VaultAuthManager;
+import io.quarkus.vault.runtime.VaultCredentialsProvider;
+import io.quarkus.vault.runtime.VaultDbManager;
+import io.quarkus.vault.runtime.VaultKubernetesAuthManager;
+import io.quarkus.vault.runtime.VaultKvManager;
 import io.quarkus.vault.runtime.VaultRecorder;
-import io.quarkus.vault.runtime.VaultServiceProducer;
+import io.quarkus.vault.runtime.VaultSystemBackendManager;
+import io.quarkus.vault.runtime.VaultTOTPManager;
+import io.quarkus.vault.runtime.VaultTransitManager;
+import io.quarkus.vault.runtime.client.OkHttpVaultClient;
 import io.quarkus.vault.runtime.client.dto.VaultModel;
 import io.quarkus.vault.runtime.config.VaultBuildTimeConfig;
 import io.quarkus.vault.runtime.config.VaultRuntimeConfig;
@@ -59,17 +66,22 @@ public class VaultProcessor {
     AdditionalBeanBuildItem registerAdditionalBeans() {
         return new AdditionalBeanBuildItem.Builder()
                 .setUnremovable()
-                .addBeanClass(VaultServiceProducer.class)
-                .addBeanClass(VaultKVSecretEngine.class)
+                .addBeanClass(VaultCredentialsProvider.class)
+                .addBeanClass(VaultKvManager.class)
+                .addBeanClass(VaultTransitManager.class)
+                .addBeanClass(VaultTOTPManager.class)
+                .addBeanClass(VaultSystemBackendManager.class)
+                .addBeanClass(VaultKubernetesAuthManager.class)
+                .addBeanClass(VaultAuthManager.class)
+                .addBeanClass(VaultDbManager.class)
+                .addBeanClass(OkHttpVaultClient.class)
                 .build();
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    public RunTimeConfigurationSourceValueBuildItem configure(VaultRecorder recorder, VaultBuildTimeConfig buildTimeConfig,
-            VaultRuntimeConfig serverConfig, TlsConfig tlsConfig) {
-        return new RunTimeConfigurationSourceValueBuildItem(
-                recorder.configureRuntimeProperties(buildTimeConfig, serverConfig, tlsConfig));
+    RunTimeConfigurationSourceValueBuildItem configure(VaultRecorder recorder, VaultRuntimeConfig serverConfig) {
+        return new RunTimeConfigurationSourceValueBuildItem(recorder.configureRuntimeProperties(serverConfig));
     }
 
     @BuildStep

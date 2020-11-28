@@ -10,6 +10,8 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.inject.Singleton;
+
 import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -78,6 +80,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
+@Singleton
 public class OkHttpVaultClient implements VaultClient {
 
     private static final Logger log = Logger.getLogger(OkHttpVaultClient.class);
@@ -87,15 +90,20 @@ public class OkHttpVaultClient implements VaultClient {
     private OkHttpClient client;
     private URL url;
     private String kubernetesAuthMountPath;
-    private ObjectMapper mapper = new ObjectMapper();
+    private TlsConfig tlsConfig;
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    public OkHttpVaultClient(VaultRuntimeConfig serverConfig, TlsConfig tlsConfig) {
-        this.client = createHttpClient(serverConfig, tlsConfig);
-        this.url = serverConfig.url.get();
+    public OkHttpVaultClient(TlsConfig tlsConfig) {
+        this.tlsConfig = tlsConfig;
         this.mapper.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+    }
 
-        this.kubernetesAuthMountPath = serverConfig.authentication.kubernetes.authMountPath;
+    public OkHttpVaultClient initWith(VaultRuntimeConfig vaultRuntimeConfig) {
+        this.url = vaultRuntimeConfig.url.get();
+        this.kubernetesAuthMountPath = vaultRuntimeConfig.authentication.kubernetes.authMountPath;
+        this.client = createHttpClient(vaultRuntimeConfig, tlsConfig);
+        return this;
     }
 
     @Override
