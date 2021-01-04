@@ -3,6 +3,7 @@ package io.quarkus.vault.runtime;
 import java.util.Map;
 
 import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
 import io.quarkus.vault.VaultKVSecretEngine;
@@ -20,8 +21,11 @@ public class VaultKvManager implements VaultKVSecretEngine {
     @Inject
     private VaultClient vaultClient;
 
+    @Inject
+    Instance<VaultConfigHolder> vaultConfigHolder;
+
     private VaultRuntimeConfig getVaultRuntimeConfig() {
-        return vaultAuthManager.getVaultRuntimeConfig();
+        return vaultConfigHolder.get().getVaultRuntimeConfig();
     }
 
     @Override

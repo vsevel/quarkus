@@ -10,7 +10,10 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.inject.Singleton;
+import javax.annotation.PostConstruct;
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
 
 import org.jboss.logging.Logger;
 
@@ -20,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import io.quarkus.runtime.TlsConfig;
 import io.quarkus.vault.VaultException;
+import io.quarkus.vault.runtime.VaultConfigHolder;
 import io.quarkus.vault.runtime.client.dto.auth.VaultAppRoleAuth;
 import io.quarkus.vault.runtime.client.dto.auth.VaultAppRoleAuthBody;
 import io.quarkus.vault.runtime.client.dto.auth.VaultKubernetesAuth;
@@ -80,7 +84,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-@Singleton
+@ApplicationScoped
 public class OkHttpVaultClient implements VaultClient {
 
     private static final Logger log = Logger.getLogger(OkHttpVaultClient.class);
@@ -93,10 +97,21 @@ public class OkHttpVaultClient implements VaultClient {
     private TlsConfig tlsConfig;
     private final ObjectMapper mapper = new ObjectMapper();
 
+    @Inject
+    Instance<VaultConfigHolder> vaultConfigHolder;
+
     public OkHttpVaultClient(TlsConfig tlsConfig) {
         this.tlsConfig = tlsConfig;
         this.mapper.configure(FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+    }
+
+    @PostConstruct
+    void postConstruct() {
+        VaultRuntimeConfig vaultRuntimeConfig = vaultConfigHolder.get().getVaultRuntimeConfig();
+        if (vaultRuntimeConfig.url.isPresent()) {
+            initWith(vaultRuntimeConfig);
+        }
     }
 
     public OkHttpVaultClient initWith(VaultRuntimeConfig vaultRuntimeConfig) {

@@ -1,8 +1,11 @@
 package io.quarkus.vault;
 
+import javax.enterprise.context.ApplicationScoped;
+
 import org.jboss.jandex.DotName;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
+import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -19,6 +22,7 @@ import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 import io.quarkus.vault.runtime.Base64StringDeserializer;
 import io.quarkus.vault.runtime.Base64StringSerializer;
 import io.quarkus.vault.runtime.VaultAuthManager;
+import io.quarkus.vault.runtime.VaultConfigHolder;
 import io.quarkus.vault.runtime.VaultCredentialsProvider;
 import io.quarkus.vault.runtime.VaultDbManager;
 import io.quarkus.vault.runtime.VaultKubernetesAuthManager;
@@ -60,6 +64,23 @@ public class VaultProcessor {
                 new ReflectiveClassBuildItem(false, false, Base64StringDeserializer.class, Base64StringSerializer.class));
 
         sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.VAULT));
+    }
+
+    @Record(ExecutionTime.RUNTIME_INIT)
+    @BuildStep
+    void createSyntheticBean(VaultRecorder recorder, VaultRuntimeConfig serverConfig,
+            BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer) {
+
+        SyntheticBeanBuildItem buildItem = SyntheticBeanBuildItem
+                .configure(VaultConfigHolder.class)
+                .scope(ApplicationScoped.class)
+                .setRuntimeInit()
+                .unremovable()
+                .supplier(recorder.createVaultConfigHolder(serverConfig))
+                .defaultBean()
+                .done();
+
+        syntheticBeanBuildItemBuildProducer.produce(buildItem);
     }
 
     @BuildStep

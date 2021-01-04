@@ -17,7 +17,9 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
-import javax.inject.Singleton;
+import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
 
 import org.jboss.logging.Logger;
 
@@ -37,48 +39,55 @@ import io.quarkus.vault.runtime.config.VaultRuntimeConfig;
 /**
  * Handles authentication. Supports revocation and renewal.
  */
-@Singleton
+@ApplicationScoped
 public class VaultAuthManager {
 
     private static final Logger log = Logger.getLogger(VaultAuthManager.class.getName());
     public static final String USERPASS_WRAPPING_TOKEN_PASSWORD_KEY = "password";
 
-    private VaultRuntimeConfig vaultRuntimeConfig;
+    private volatile VaultRuntimeConfig vaultRuntimeConfig;
     private VaultClient vaultClient;
     private AtomicReference<VaultToken> loginCache = new AtomicReference<>(null);
     private Map<String, String> wrappedCache = new ConcurrentHashMap<>();
     private Semaphore unwrapSem = new Semaphore(1);
+
+    @Inject
+    Instance<VaultConfigHolder> vaultConfigHolder;
 
     VaultAuthManager(VaultClient vaultClient) {
         this.vaultClient = vaultClient;
     }
 
     public VaultRuntimeConfig getVaultRuntimeConfig() {
+        if (vaultRuntimeConfig == null) {
+            vaultRuntimeConfig = vaultConfigHolder.get().getVaultRuntimeConfig();
+        }
         return vaultRuntimeConfig;
     }
 
-    public VaultAuthManager setVaultRuntimeConfig(VaultRuntimeConfig vaultRuntimeConfig) {
+    VaultAuthManager setVaultRuntimeConfig(VaultRuntimeConfig vaultRuntimeConfig) {
         this.vaultRuntimeConfig = vaultRuntimeConfig;
         return this;
     }
 
     public String getClientToken() {
-        return vaultRuntimeConfig.authentication.isDirectClientToken() ? getDirectClientToken() : login().clientToken;
+        return getVaultRuntimeConfig().authentication.isDirectClientToken() ? getDirectClientToken() : login().clientToken;
     }
 
     private String getDirectClientToken() {
 
-        Optional<String> clientTokenOption = vaultRuntimeConfig.authentication.clientToken;
+        Optional<String> clientTokenOption = getVaultRuntimeConfig().authentication.clientToken;
         if (clientTokenOption.isPresent()) {
             return clientTokenOption.get();
         }
 
         return unwrapWrappingTokenOnce("client token",
-                vaultRuntimeConfig.authentication.clientTokenWrappingToken.get(), unwrap -> unwrap.auth.clientToken,
+                getVaultRuntimeConfig().authentication.clientTokenWrappingToken.get(), unwrap -> unwrap.auth.clientToken,
                 VaultTokenCreate.class);
     }
 
     private VaultToken login() {
+
         VaultToken vaultToken = login(loginCache.get());
         loginCache.set(vaultToken);
         return vaultToken;
@@ -94,12 +103,12 @@ public class VaultAuthManager {
         }
 
         // extend clientToken if necessary
-        if (vaultToken != null && vaultToken.shouldExtend(vaultRuntimeConfig.renewGracePeriod)) {
+        if (vaultToken != null && vaultToken.shouldExtend(getVaultRuntimeConfig().renewGracePeriod)) {
             vaultToken = extend(vaultToken.clientToken);
         }
 
         // create new clientToken if necessary
-        if (vaultToken == null || vaultToken.isExpired() || vaultToken.expiresSoon(vaultRuntimeConfig.renewGracePeriod)) {
+        if (vaultToken == null || vaultToken.isExpired() || vaultToken.expiresSoon(getVaultRuntimeConfig().renewGracePeriod)) {
             vaultToken = vaultLogin();
         }
 
@@ -124,14 +133,15 @@ public class VaultAuthManager {
         VaultRenewSelfAuth auth = vaultClient.renewSelf(clientToken, null).auth;
         VaultToken vaultToken = new VaultToken(auth.clientToken, auth.renewable, auth.leaseDurationSecs);
         sanityCheck(vaultToken);
-        log.debug("extended login token: " + vaultToken.getConfidentialInfo(vaultRuntimeConfig.logConfidentialityLevel));
+        log.debug("extended login token: " + vaultToken.getConfidentialInfo(getVaultRuntimeConfig().logConfidentialityLevel));
         return vaultToken;
     }
 
     private VaultToken vaultLogin() {
-        VaultToken vaultToken = login(vaultRuntimeConfig.getAuthenticationType());
+        VaultToken vaultToken = login(getVaultRuntimeConfig().getAuthenticationType());
         sanityCheck(vaultToken);
-        log.debug("created new login token: " + vaultToken.getConfidentialInfo(vaultRuntimeConfig.logConfidentialityLevel));
+        log.debug(
+                "created new login token: " + vaultToken.getConfidentialInfo(getVaultRuntimeConfig().logConfidentialityLevel));
         return vaultToken;
     }
 
@@ -140,15 +150,15 @@ public class VaultAuthManager {
         if (type == KUBERNETES) {
             auth = loginKubernetes();
         } else if (type == USERPASS) {
-            String username = vaultRuntimeConfig.authentication.userpass.username.get();
+            String username = getVaultRuntimeConfig().authentication.userpass.username.get();
             String password = getPassword();
             auth = vaultClient.loginUserPass(username, password).auth;
         } else if (type == APPROLE) {
-            String roleId = vaultRuntimeConfig.authentication.appRole.roleId.get();
+            String roleId = getVaultRuntimeConfig().authentication.appRole.roleId.get();
             String secretId = getSecretId();
             auth = vaultClient.loginAppRole(roleId, secretId).auth;
         } else {
-            throw new UnsupportedOperationException("unknown authType " + vaultRuntimeConfig.getAuthenticationType());
+            throw new UnsupportedOperationException("unknown authType " + getVaultRuntimeConfig().getAuthenticationType());
         }
 
         return new VaultToken(auth.clientToken, auth.renewable, auth.leaseDurationSecs);
@@ -156,25 +166,25 @@ public class VaultAuthManager {
 
     private String getSecretId() {
 
-        Optional<String> secretIdOption = vaultRuntimeConfig.authentication.appRole.secretId;
+        Optional<String> secretIdOption = getVaultRuntimeConfig().authentication.appRole.secretId;
         if (secretIdOption.isPresent()) {
             return secretIdOption.get();
         }
 
         return unwrapWrappingTokenOnce("secret id",
-                vaultRuntimeConfig.authentication.appRole.secretIdWrappingToken.get(), unwrap -> unwrap.data.secretId,
+                getVaultRuntimeConfig().authentication.appRole.secretIdWrappingToken.get(), unwrap -> unwrap.data.secretId,
                 VaultAppRoleGenerateNewSecretID.class);
     }
 
     private String getPassword() {
 
-        Optional<String> passwordOption = vaultRuntimeConfig.authentication.userpass.password;
+        Optional<String> passwordOption = getVaultRuntimeConfig().authentication.userpass.password;
         if (passwordOption.isPresent()) {
             return passwordOption.get();
         }
 
-        String wrappingToken = vaultRuntimeConfig.authentication.userpass.passwordWrappingToken.get();
-        if (vaultRuntimeConfig.kvSecretEngineVersion == 1) {
+        String wrappingToken = getVaultRuntimeConfig().authentication.userpass.passwordWrappingToken.get();
+        if (getVaultRuntimeConfig().kvSecretEngineVersion == 1) {
             Function<VaultKvSecretV1, String> f = unwrap -> unwrap.data.get(USERPASS_WRAPPING_TOKEN_PASSWORD_KEY);
             return unwrapWrappingTokenOnce("password", wrappingToken, f, VaultKvSecretV1.class);
         } else {
@@ -223,7 +233,7 @@ public class VaultAuthManager {
 
                 wrappedValue = f.apply(unwrap);
                 wrappedCache.put(wrappingToken, wrappedValue);
-                String displayValue = vaultRuntimeConfig.logConfidentialityLevel.maskWithTolerance(wrappedValue, LOW);
+                String displayValue = getVaultRuntimeConfig().logConfidentialityLevel.maskWithTolerance(wrappedValue, LOW);
                 log.debug("unwrapped " + type + ": " + displayValue);
                 return wrappedValue;
 
@@ -236,10 +246,10 @@ public class VaultAuthManager {
     }
 
     private VaultKubernetesAuthAuth loginKubernetes() {
-        String jwt = new String(read(vaultRuntimeConfig.authentication.kubernetes.jwtTokenPath), StandardCharsets.UTF_8);
-        log.debug("authenticate with jwt at: " + vaultRuntimeConfig.authentication.kubernetes.jwtTokenPath + " => "
-                + vaultRuntimeConfig.logConfidentialityLevel.maskWithTolerance(jwt, LOW));
-        return vaultClient.loginKubernetes(vaultRuntimeConfig.authentication.kubernetes.role.get(), jwt).auth;
+        String jwt = new String(read(getVaultRuntimeConfig().authentication.kubernetes.jwtTokenPath), StandardCharsets.UTF_8);
+        log.debug("authenticate with jwt at: " + getVaultRuntimeConfig().authentication.kubernetes.jwtTokenPath + " => "
+                + getVaultRuntimeConfig().logConfidentialityLevel.maskWithTolerance(jwt, LOW));
+        return vaultClient.loginKubernetes(getVaultRuntimeConfig().authentication.kubernetes.role.get(), jwt).auth;
     }
 
     private byte[] read(String path) {
@@ -251,7 +261,7 @@ public class VaultAuthManager {
     }
 
     private void sanityCheck(VaultToken vaultToken) {
-        vaultToken.leaseDurationSanityCheck("auth", vaultRuntimeConfig.renewGracePeriod);
+        vaultToken.leaseDurationSanityCheck("auth", getVaultRuntimeConfig().renewGracePeriod);
     }
 
 }

@@ -7,6 +7,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+import javax.enterprise.inject.Instance;
+import javax.inject.Inject;
 import javax.inject.Singleton;
 
 import org.jboss.logging.Logger;
@@ -26,13 +28,16 @@ public class VaultDbManager {
     private VaultAuthManager vaultAuthManager;
     private VaultClient vaultClient;
 
+    @Inject
+    Instance<VaultConfigHolder> vaultConfigHolder;
+
     public VaultDbManager(VaultAuthManager vaultAuthManager, VaultClient vaultClient) {
         this.vaultAuthManager = vaultAuthManager;
         this.vaultClient = vaultClient;
     }
 
     public VaultRuntimeConfig getVaultRuntimeConfig() {
-        return vaultAuthManager.getVaultRuntimeConfig();
+        return vaultConfigHolder.get().getVaultRuntimeConfig();
     }
 
     public Map<String, String> getDynamicDbCredentials(String databaseCredentialsRole) {

@@ -38,7 +38,12 @@ public class VaultDbManagerTest {
     VaultRenewLease vaultRenewLease = new VaultRenewLease();
     OkHttpVaultClient vaultClient = createVaultClient();
     VaultAuthManager vaultAuthManager = new VaultAuthManager(vaultClient).setVaultRuntimeConfig(config);
-    VaultDbManager vaultDbManager = new VaultDbManager(vaultAuthManager, vaultClient);
+    VaultDbManager vaultDbManager = new VaultDbManager(vaultAuthManager, vaultClient) {
+        @Override
+        public VaultRuntimeConfig getVaultRuntimeConfig() {
+            return config;
+        }
+    };
     String mydbrole = "mydbrole";
     String mylease = "mylease";
 

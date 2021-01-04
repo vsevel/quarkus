@@ -16,6 +16,7 @@ import java.util.function.Function;
 import java.util.stream.IntStream;
 
 import javax.enterprise.context.ApplicationScoped;
+import javax.enterprise.inject.Instance;
 import javax.inject.Inject;
 
 import io.quarkus.vault.VaultException;
@@ -77,6 +78,9 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
     @Inject
     private VaultClient vaultClient;
 
+    @Inject
+    Instance<VaultConfigHolder> vaultConfigHolder;
+
     @Override
     public String encrypt(String keyName, String clearData) {
         return encrypt(keyName, new ClearData(clearData), null);
@@ -112,7 +116,7 @@ public class VaultTransitManager implements VaultTransitSecretEngine {
     }
 
     private TransitKeyConfig getTransitConfig(String keyName) {
-        return vaultAuthManager.getVaultRuntimeConfig().transit.key.get(keyName);
+        return vaultConfigHolder.get().getVaultRuntimeConfig().transit.key.get(keyName);
     }
 
     @Override
