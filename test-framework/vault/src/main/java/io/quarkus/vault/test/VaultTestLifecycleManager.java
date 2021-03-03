@@ -1,7 +1,6 @@
 package io.quarkus.vault.test;
 
 import java.io.IOException;
-import java.net.URISyntaxException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -13,12 +12,14 @@ public class VaultTestLifecycleManager implements QuarkusTestResourceLifecycleMa
 
     private static final Logger log = Logger.getLogger(VaultTestLifecycleManager.class);
 
-    private VaultTestExtension vaultTestExtension = new VaultTestExtension();
+    protected VaultTestExtension vaultTestExtension;
 
     public static final String GRAALVM_JRE_LIB_AMD_64 = "/opt/graalvm/jre/lib/amd64";
 
     @Override
     public Map<String, String> start() {
+
+        vaultTestExtension = new VaultTestExtension();
 
         Map<String, String> sysprops = new HashMap<>();
 
@@ -31,7 +32,7 @@ public class VaultTestLifecycleManager implements QuarkusTestResourceLifecycleMa
 
         try {
             vaultTestExtension.start();
-        } catch (InterruptedException | IOException | URISyntaxException e) {
+        } catch (InterruptedException | IOException e) {
             throw new RuntimeException(e);
         }
 
@@ -51,6 +52,8 @@ public class VaultTestLifecycleManager implements QuarkusTestResourceLifecycleMa
 
     @Override
     public void stop() {
-        vaultTestExtension.close();
+        if (vaultTestExtension != null) {
+            vaultTestExtension.close();
+        }
     }
 }
